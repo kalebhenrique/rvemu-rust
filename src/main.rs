@@ -5,28 +5,25 @@ fn main() {
 
     let mut cpu = Cpu::new();
 
-    // 1. Simula um programa em memória na posição 0x0:
-    // addi x1, x0, 42   (0x02a00093)
-    // sw   x1, 16(x2)   (0x00112823)
-    cpu.bus.write32(0x0, 0x02a00093).unwrap();
-    cpu.bus.write32(0x4, 0x00112823).unwrap();
+    // Programa simulado em Assembly RV32:
+    // 1. addi x1, x0, 10       -> x1 = 10
+    // 2. addi x2, x0, 25       -> x2 = 25
+    // 3. add  x3, x1, x2       -> x3 = 35
+    // 4. sub  x4, x3, x1       -> x4 = 25
+    // 5. slli x5, x1, 2        -> x5 = 10 << 2 = 40
+    // 6. lui  x6, 0x12345      -> x6 = 0x12345000
+    cpu.bus.write32(0x0, 0x00a00093).unwrap(); // addi x1, x0, 10
+    cpu.bus.write32(0x4, 0x01900113).unwrap(); // addi x2, x0, 25
+    cpu.bus.write32(0x8, 0x002081b3).unwrap(); // add  x3, x1, x2
+    cpu.bus.write32(0xc, 0x40118233).unwrap(); // sub  x4, x3, x1
+    cpu.bus.write32(0x10, 0x00209293).unwrap(); // slli x5, x1, 2
+    cpu.bus.write32(0x14, 0x12345337).unwrap(); // lui  x6, 0x12345
 
-    println!("\n--- Fetch & Decode da 1ª instrução (PC: 0x0000) ---");
-    cpu.pc = 0x0;
-    let inst1 = cpu.fetch().unwrap();
-    println!("Palavra binária: 0x{:08x}", inst1.0);
-    println!("Opcode : 0x{:02x} (OP_IMM)", inst1.opcode());
-    println!("rd     : x{} ({})", inst1.rd(), rvemu_rust::cpu::ABI_REG_NAMES[inst1.rd()]);
-    println!("funct3 : {}", inst1.funct3());
-    println!("rs1    : x{} ({})", inst1.rs1(), rvemu_rust::cpu::ABI_REG_NAMES[inst1.rs1()]);
-    println!("imm_i  : {} (decimal)", inst1.imm_i() as i32);
+    println!("Executando 6 instruções...");
+    for _ in 0..6 {
+        cpu.step().expect("Erro na execução da instrução");
+    }
 
-    println!("\n--- Fetch & Decode da 2ª instrução (PC: 0x0004) ---");
-    cpu.pc = 0x4;
-    let inst2 = cpu.fetch().unwrap();
-    println!("Palavra binária: 0x{:08x}", inst2.0);
-    println!("Opcode : 0x{:02x} (OP_STORE)", inst2.opcode());
-    println!("rs1    : x{} ({})", inst2.rs1(), rvemu_rust::cpu::ABI_REG_NAMES[inst2.rs1()]);
-    println!("rs2    : x{} ({})", inst2.rs2(), rvemu_rust::cpu::ABI_REG_NAMES[inst2.rs2()]);
-    println!("imm_s  : {} (decimal)", inst2.imm_s() as i32);
+    println!("\nPrograma finalizado com sucesso!");
+    cpu.dump_registers();
 }

@@ -4,6 +4,6 @@ pub mod dram;
 pub mod instruction;
 
 pub use bus::Bus;
-pub use cpu::Cpu;
+pub use cpu::{Cpu, CpuError};
 pub use dram::Dram;
 pub use instruction::Instruction;

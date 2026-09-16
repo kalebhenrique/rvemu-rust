@@ -60,10 +60,10 @@ flowchart LR
 - [x] **Milestone 2: Fetch & Decode**
   - [x] Leitura da instrução de 32 bits apontada pelo `PC`.
   - [x] Decodificação de campos e extensão de sinal para todos os formatos de imediatos.
-- [ ] **Milestone 3: Instruções Aritméticas e Lógicas (Execute - Parte 1)**
-  - [ ] Instruções com imediatos (`ADDI`, `SLTI`, `XORI`, `ORI`, `ANDI`, `SLLI`, `SRLI`, `SRAI`).
-  - [ ] Instruções registrador-registrador (`ADD`, `SUB`, `SLL`, `SLT`, `XOR`, `SRL`, `SRA`, `OR`, `AND`).
-  - [ ] Aritmética com `wrapping_*` para prevenção de panic por overflow no Rust.
+- [x] **Milestone 3: Instruções Aritméticas e Lógicas (Execute - Parte 1)**
+  - [x] Instruções com imediatos (`ADDI`, `SLTI`, `XORI`, `ORI`, `ANDI`, `SLLI`, `SRLI`, `SRAI`).
+  - [x] Instruções registrador-registrador (`ADD`, `SUB`, `SLL`, `SLT`, `XOR`, `SRL`, `SRA`, `OR`, `AND`).
+  - [x] Aritmética com `wrapping_*` para prevenção de panic por overflow no Rust.
 - [ ] **Milestone 4: Saltos, Condicionais e Memória (Execute - Parte 2)**
   - [ ] Branches condicionais (`BEQ`, `BNE`, `BLT`, `BGE`, `BLTU`, `BGEU`).
   - [ ] Saltos incondicionais (`JAL`, `JALR`).

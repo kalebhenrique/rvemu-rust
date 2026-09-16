@@ -49,10 +49,10 @@ Implementar a especificação base **RV32I (Unprivileged ISA)**, permitindo:
   - [x] Saltos incondicionais (`JAL`, `JALR`).
   - [x] Instruções de Load/Store (`LB`, `LH`, `LW`, `SB`, `SH`, `SW`).
   - [x] Imediatos superiores (`LUI`, `AUIPC`).
-- [ ] **Milestone 5: Sistema, Carregamento de Binários & Testes**
-  - [ ] Suporte básico a `ECALL` e `EBREAK`.
-  - [ ] Leitor de arquivos binários planos (`.bin`).
-  - [ ] Bateria de testes automatizados com pequenos programas assembly (Fibonacci, somatório).
+- [x] **Milestone 5: Sistema, Carregamento de Binários & Testes**
+  - [x] Suporte básico a `ECALL` e `EBREAK`.
+  - [x] Leitor de arquivos binários planos (`.bin`).
+  - [x] Bateria de testes automatizados com pequenos programas assembly (Fibonacci, somatório).
 
 ---
 
@@ -87,17 +87,26 @@ Clone o repositório e navegue até a pasta:
 cargo build
 ```
 
-Para rodar o emulador:
+Para rodar um arquivo Assembly direto (`.asm` ou `.s`):
 
 ```bash
-cargo run
+cargo run -- exemplos/fibonacci.asm
 ```
 
-Para rodar a suíte de testes unitários:
+Para rodar um binário compilado (`.bin`):
 
 ```bash
-cargo test
+cargo run -- programa.bin
 ```
+
+---
+
+## 🛠️ Mini-Assembler Integrado (`src/assembler.rs`)
+
+O emulador conta com um montador de **dois passos (Two-Pass Assembler)** embutido:
+- **Passo 1:** Remove comentários (`#` ou `//`), calcula endereços de PC e registra tabelas de rótulos (*labels*). Expande pseudo-instruções como `nop`, `mv`, `li`, `j` e `ret`.
+- **Passo 2:** Converte mnemônicos nos 32 bits de instrução correspondentes, calculando saltos relativos ao PC para branches e jumps.
+- **Suporte a Registradores:** Aceita tanto nomes literais (`x0` - `x31`) quanto nomes da convenção ABI RISC-V (`zero`, `ra`, `sp`, `a0`-`a7`, `t0`-`t6`, `s0`-`s11`).
 
 ---
 

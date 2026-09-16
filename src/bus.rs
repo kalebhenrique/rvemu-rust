@@ -41,6 +41,10 @@ impl Bus {
     pub fn write32(&mut self, addr: u32, val: u32) -> Result<(), MemoryError> {
         self.dram.write32(addr, val)
     }
+
+    pub fn load(&mut self, addr: u32, bytes: &[u8]) {
+        self.dram.load(addr, bytes);
+    }
 }
 
 impl Default for Bus {

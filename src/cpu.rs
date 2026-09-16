@@ -1,7 +1,8 @@
 use crate::bus::Bus;
 use crate::dram::MemoryError;
 use crate::instruction::{
-    Instruction, OP_AUIPC, OP_BRANCH, OP_IMM, OP_JAL, OP_JALR, OP_LOAD, OP_LUI, OP_REG, OP_STORE,
+    Instruction, OP_AUIPC, OP_BRANCH, OP_FENCE, OP_IMM, OP_JAL, OP_JALR, OP_LOAD, OP_LUI, OP_REG,
+    OP_STORE, OP_SYSTEM,
 };
 
 pub const REGISTERS_COUNT: usize = 32;
@@ -16,6 +17,7 @@ pub const ABI_REG_NAMES: [&str; REGISTERS_COUNT] = [
 pub enum CpuError {
     MemoryError(MemoryError),
     IllegalInstruction(u32),
+    UnknownSyscall(u32),
 }
 
 impl From<MemoryError> for CpuError {
@@ -29,6 +31,8 @@ pub struct Cpu {
     pub regs: [u32; REGISTERS_COUNT],
     pub pc: u32,
     pub bus: Bus,
+    pub is_halted: bool,
+    pub exit_code: Option<i32>,
 }
 
 impl Cpu {
@@ -37,6 +41,8 @@ impl Cpu {
             regs: [0; REGISTERS_COUNT],
             pc: 0,
             bus: Bus::new(),
+            is_halted: false,
+            exit_code: None,
         }
     }
 
@@ -45,7 +51,31 @@ impl Cpu {
             regs: [0; REGISTERS_COUNT],
             pc: 0,
             bus,
+            is_halted: false,
+            exit_code: None,
         }
+    }
+
+    // Carrega um programa de bytes na DRAM no endereço 0x0
+    pub fn load_program(&mut self, binary: &[u8]) {
+        self.bus.load(0x0, binary);
+        self.pc = 0x0;
+        self.is_halted = false;
+        self.exit_code = None;
+    }
+
+    // Carrega um arquivo binário do disco para a DRAM
+    pub fn load_file<P: AsRef<std::path::Path>>(&mut self, path: P) -> std::io::Result<()> {
+        let bytes = std::fs::read(path)?;
+        self.load_program(&bytes);
+        Ok(())
+    }
+
+    // Monta o código fonte em texto assembly e carrega na DRAM a partir de 0x0
+    pub fn load_assembly(&mut self, source: &str) -> Result<(), crate::assembler::AssemblerError> {
+        let bytes = crate::assembler::Assembler::assemble(source)?;
+        self.load_program(&bytes);
+        Ok(())
     }
 
     // Busca a instrução de 32 bits apontada pelo PC
@@ -250,14 +280,70 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(4);
             }
 
+            // Barreira de Memória (FENCE) - tratada como NOP
+            OP_FENCE => {
+                self.pc = self.pc.wrapping_add(4);
+            }
+
+            // Instruções de Sistema (ECALL / EBREAK)
+            OP_SYSTEM => {
+                let funct12 = (inst.0 >> 20) & 0xFFF;
+                match funct12 {
+                    0x000 => {
+                        self.handle_ecall()?;
+                    }
+                    0x001 => {
+                        self.is_halted = true;
+                    }
+                    _ => return Err(CpuError::IllegalInstruction(inst.0)),
+                }
+                self.pc = self.pc.wrapping_add(4);
+            }
+
             _ => return Err(CpuError::IllegalInstruction(inst.0)),
         }
 
         Ok(())
     }
 
+    fn handle_ecall(&mut self) -> Result<(), CpuError> {
+        let syscall_id = self.read_reg(17); // a7 (x17)
+        match syscall_id {
+            // Syscall 93: exit(status)
+            93 => {
+                let code = self.read_reg(10) as i32; // a0 (x10)
+                self.is_halted = true;
+                self.exit_code = Some(code);
+            }
+            // Syscall 64: write(fd, buf, count)
+            64 => {
+                let fd = self.read_reg(10);
+                let buf = self.read_reg(11);
+                let count = self.read_reg(12);
+
+                let mut bytes = Vec::with_capacity(count as usize);
+                for i in 0..count {
+                    bytes.push(self.bus.read8(buf.wrapping_add(i))?);
+                }
+
+                if fd == 1 || fd == 2 {
+                    use std::io::Write;
+                    let _ = std::io::stdout().write_all(&bytes);
+                    let _ = std::io::stdout().flush();
+                }
+
+                self.write_reg(10, count);
+            }
+            _ => return Err(CpuError::UnknownSyscall(syscall_id)),
+        }
+        Ok(())
+    }
+
     // Executa um ciclo completo: busca a instrução e executa
     pub fn step(&mut self) -> Result<(), CpuError> {
+        if self.is_halted {
+            return Ok(());
+        }
         let inst = self.fetch()?;
         self.execute(inst)
     }
@@ -316,6 +402,8 @@ mod tests {
     fn test_cpu_initialization() {
         let cpu = Cpu::new();
         assert_eq!(cpu.pc, 0);
+        assert!(!cpu.is_halted);
+        assert_eq!(cpu.exit_code, None);
         for i in 0..REGISTERS_COUNT {
             assert_eq!(cpu.read_reg(i), 0);
         }
@@ -449,15 +537,13 @@ mod tests {
         cpu.pc = 0x10;
         cpu.write_reg(1, 42);
         cpu.write_reg(2, 42);
-        cpu.write_reg(3, 99);
 
-        // beq x1, x2, 16 -> salta se x1 == x2 (42 == 42 -> SIM) -> 0x00208863
+        // beq x1, x2, 16 -> salta se x1 == x2
         cpu.execute(Instruction(0x00208863)).unwrap();
         assert_eq!(cpu.pc, 0x10 + 16);
 
-        // bne x1, x2, 16 -> salta se x1 != x2 (42 != 42 -> NÃO) -> pc avança 4
+        // bne x1, x2, 16 -> salta se x1 != x2
         let current_pc = cpu.pc;
-        // bne x1, x2, 16: funct3=1, rs1=1, rs2=2 -> 0x00209863
         cpu.execute(Instruction(0x00209863)).unwrap();
         assert_eq!(cpu.pc, current_pc + 4);
     }
@@ -467,13 +553,12 @@ mod tests {
         let mut cpu = Cpu::new();
         cpu.pc = 0x20;
 
-        // jal x1, 20 (salva pc + 4 em x1 e pula pc + 20) -> 0x014000ef
+        // jal x1, 20
         cpu.execute(Instruction(0x014000ef)).unwrap();
-        assert_eq!(cpu.read_reg(1), 0x24); // endereço de retorno
-        assert_eq!(cpu.pc, 0x20 + 20); // 0x34
+        assert_eq!(cpu.read_reg(1), 0x24);
+        assert_eq!(cpu.pc, 0x20 + 20);
 
-        // jalr x2, 0(x1) -> pula para x1 & !1 = 0x24
-        // jalr: imm=0, rs1=1, funct3=0, rd=2, op=0x67 -> 0x00008167
+        // jalr x2, 0(x1)
         cpu.execute(Instruction(0x00008167)).unwrap();
         assert_eq!(cpu.read_reg(2), 0x34 + 4);
         assert_eq!(cpu.pc, 0x24);
@@ -482,17 +567,13 @@ mod tests {
     #[test]
     fn test_execute_load_and_store_word() {
         let mut cpu = Cpu::new();
-        cpu.write_reg(1, 0x200); // endereço base
+        cpu.write_reg(1, 0x200);
         cpu.write_reg(2, 0xCAFE_BABE);
 
-        // sw x2, 8(x1) -> grava no endereço 0x208
-        // imm_s=8, rs2=2, rs1=1, funct3=2, op=0x23 -> 0x0020a423
-        cpu.execute(Instruction(0x0020a423)).unwrap();
+        cpu.execute(Instruction(0x0020a423)).unwrap(); // sw x2, 8(x1)
         assert_eq!(cpu.bus.read32(0x208).unwrap(), 0xCAFE_BABE);
 
-        // lw x3, 8(x1) -> lê do endereço 0x208
-        // imm_i=8, rs1=1, funct3=2, rd=3, op=0x03 -> 0x0080a183
-        cpu.execute(Instruction(0x0080a183)).unwrap();
+        cpu.execute(Instruction(0x0080a183)).unwrap(); // lw x3, 8(x1)
         assert_eq!(cpu.read_reg(3), 0xCAFE_BABE);
     }
 
@@ -500,31 +581,18 @@ mod tests {
     fn test_execute_byte_and_half_sign_extension() {
         let mut cpu = Cpu::new();
         cpu.write_reg(1, 0x100);
-        cpu.bus.write8(0x100, 0xFE).unwrap(); // -2 em signed i8
+        cpu.bus.write8(0x100, 0xFE).unwrap();
 
-        // lb x2, 0(x1) -> deve estender sinal para 0xFFFF_FFFE
-        // imm_i=0, rs1=1, funct3=0, rd=2, op=0x03 -> 0x00008103
-        cpu.execute(Instruction(0x00008103)).unwrap();
+        cpu.execute(Instruction(0x00008103)).unwrap(); // lb x2, 0(x1)
         assert_eq!(cpu.read_reg(2), 0xFFFF_FFFE);
 
-        // lbu x3, 0(x1) -> sem sinal: 0x0000_00FE
-        // imm_i=0, rs1=1, funct3=4, rd=3, op=0x03 -> 0x0000c183
-        cpu.execute(Instruction(0x0000c183)).unwrap();
+        cpu.execute(Instruction(0x0000c183)).unwrap(); // lbu x3, 0(x1)
         assert_eq!(cpu.read_reg(3), 0x0000_00FE);
     }
 
     #[test]
     fn test_execute_loop_countdown() {
         let mut cpu = Cpu::new();
-        // Programa: calcula a soma de 5 até 1 (5 + 4 + 3 + 2 + 1 = 15)
-        // 0x00: addi x1, x0, 5    (contador = 5)           -> 0x00500093
-        // 0x04: addi x2, x0, 0    (soma = 0)               -> 0x00000113
-        // [loop em 0x08]:
-        // 0x08: beq  x1, x0, 16   (se x1 == 0 pula para 0x18) -> 0x00008863
-        // 0x0c: add  x2, x2, x1   (soma += x1)             -> 0x00110133
-        // 0x10: addi x1, x1, -1   (x1 -= 1)                -> 0xfff08093
-        // 0x14: jal  x0, -12      (volta para 0x08)        -> 0xff5ff06f
-        // [fim em 0x18]
         cpu.bus.write32(0x00, 0x00500093).unwrap();
         cpu.bus.write32(0x04, 0x00000113).unwrap();
         cpu.bus.write32(0x08, 0x00008863).unwrap();
@@ -532,13 +600,52 @@ mod tests {
         cpu.bus.write32(0x10, 0xfff08093).unwrap();
         cpu.bus.write32(0x14, 0xff5ff06f).unwrap();
 
-        // Executa até chegar no endereço de término 0x18
         while cpu.pc != 0x18 {
             cpu.step().unwrap();
         }
 
-        assert_eq!(cpu.read_reg(1), 0, "Contador final deve ser 0");
-        assert_eq!(cpu.read_reg(2), 15, "Soma de 1 a 5 deve ser 15");
+        assert_eq!(cpu.read_reg(1), 0);
+        assert_eq!(cpu.read_reg(2), 15);
         assert_eq!(cpu.pc, 0x18);
+    }
+
+    #[test]
+    fn test_ecall_exit_syscall() {
+        let mut cpu = Cpu::new();
+        cpu.write_reg(17, 93); // a7 = 93 (exit)
+        cpu.write_reg(10, 42); // a0 = 42 (exit code)
+
+        // ecall (0x00000073)
+        cpu.execute(Instruction(0x00000073)).unwrap();
+        assert!(cpu.is_halted);
+        assert_eq!(cpu.exit_code, Some(42));
+    }
+
+    #[test]
+    fn test_ebreak_instruction() {
+        let mut cpu = Cpu::new();
+        // ebreak (0x00100073)
+        cpu.execute(Instruction(0x00100073)).unwrap();
+        assert!(cpu.is_halted);
+    }
+
+    #[test]
+    fn test_fence_instruction_as_nop() {
+        let mut cpu = Cpu::new();
+        cpu.pc = 0x10;
+        // fence (0x0000000f)
+        cpu.execute(Instruction(0x0000000f)).unwrap();
+        assert_eq!(cpu.pc, 0x14);
+    }
+
+    #[test]
+    fn test_load_program_slice() {
+        let mut cpu = Cpu::new();
+        let program = [0x93, 0x00, 0xa0, 0x00]; // addi x1, x0, 10 em Little-Endian bytes
+        cpu.load_program(&program);
+
+        assert_eq!(cpu.pc, 0);
+        cpu.step().unwrap();
+        assert_eq!(cpu.read_reg(1), 10);
     }
 }

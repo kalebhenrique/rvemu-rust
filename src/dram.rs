@@ -97,6 +97,15 @@ impl Dram {
             Err(MemoryError::OutOfBounds(addr))
         }
     }
+
+    // Carrega um bloco de bytes diretamente na memória
+    pub fn load(&mut self, addr: u32, bytes: &[u8]) {
+        let start = addr as usize;
+        let end = start + bytes.len();
+        if end <= self.data.len() {
+            self.data[start..end].copy_from_slice(bytes);
+        }
+    }
 }
 
 impl Default for Dram {

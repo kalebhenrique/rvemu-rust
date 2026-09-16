@@ -1,5 +1,6 @@
 // Opcodes base do RV32I
 pub const OP_LOAD: u32 = 0x03;
+pub const OP_FENCE: u32 = 0x0F;
 pub const OP_IMM: u32 = 0x13;
 pub const OP_AUIPC: u32 = 0x17;
 pub const OP_STORE: u32 = 0x23;
@@ -45,7 +46,6 @@ impl Instruction {
     }
 
     // Imediato Tipo-I (12 bits com extensão de sinal)
-    // Shift aritmético em i32 estende o sinal automaticamente
     pub fn imm_i(&self) -> u32 {
         ((self.0 as i32) >> 20) as u32
     }
@@ -87,7 +87,6 @@ mod tests {
 
     #[test]
     fn test_decode_addi_positive() {
-        // addi x1, x0, 42 -> binário: 0x02a00093
         let inst = Instruction(0x02a00093);
         assert_eq!(inst.opcode(), OP_IMM);
         assert_eq!(inst.rd(), 1);
@@ -98,7 +97,6 @@ mod tests {
 
     #[test]
     fn test_decode_addi_negative_sign_extension() {
-        // addi x2, x2, -16 -> binário: 0xff010113
         let inst = Instruction(0xff010113);
         assert_eq!(inst.opcode(), OP_IMM);
         assert_eq!(inst.rd(), 2);
@@ -109,7 +107,6 @@ mod tests {
 
     #[test]
     fn test_decode_store_type_s() {
-        // sw x5, 16(x2) -> binário: 0x00512823
         let inst = Instruction(0x00512823);
         assert_eq!(inst.opcode(), OP_STORE);
         assert_eq!(inst.funct3(), 2);
@@ -120,7 +117,6 @@ mod tests {
 
     #[test]
     fn test_decode_store_type_s_negative() {
-        // sw x5, -4(x2) -> binário: 0xfe512e23
         let inst = Instruction(0xfe512e23);
         assert_eq!(inst.opcode(), OP_STORE);
         assert_eq!(inst.imm_s() as i32, -4);
@@ -128,7 +124,6 @@ mod tests {
 
     #[test]
     fn test_decode_branch_type_b() {
-        // beq x1, x2, 16 -> binário: 0x00208863
         let inst = Instruction(0x00208863);
         assert_eq!(inst.opcode(), OP_BRANCH);
         assert_eq!(inst.funct3(), 0);
@@ -139,7 +134,6 @@ mod tests {
 
     #[test]
     fn test_decode_branch_type_b_negative() {
-        // beq x1, x2, -8 -> binário: 0xfe208ce3
         let inst = Instruction(0xfe208ce3);
         assert_eq!(inst.opcode(), OP_BRANCH);
         assert_eq!(inst.imm_b() as i32, -8);
@@ -147,7 +141,6 @@ mod tests {
 
     #[test]
     fn test_decode_upper_type_u() {
-        // lui x1, 0x12345 -> binário: 0x123450b7
         let inst = Instruction(0x123450b7);
         assert_eq!(inst.opcode(), OP_LUI);
         assert_eq!(inst.rd(), 1);
@@ -156,7 +149,6 @@ mod tests {
 
     #[test]
     fn test_decode_jump_type_j() {
-        // jal x1, 20 -> binário: 0x014000ef
         let inst = Instruction(0x014000ef);
         assert_eq!(inst.opcode(), OP_JAL);
         assert_eq!(inst.rd(), 1);

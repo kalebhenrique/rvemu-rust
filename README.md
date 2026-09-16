@@ -19,26 +19,6 @@ Implementar a especificação base **RV32I (Unprivileged ISA)**, permitindo:
 
 ## Arquitetura do Emulador
 
-```mermaid
-flowchart LR
-    subgraph CPU ["Processador (CPU)"]
-        PC["Program Counter (PC)"]
-        Regs["Banco de 32 Registradores<br/>(x0 - x31 | x0 = 0)"]
-        FDE["Fetch ➔ Decode ➔ Execute"]
-    end
-
-    subgraph MemorySystem ["Sistema de Memória"]
-        Bus["Barramento (Bus)"]
-        DRAM["Memória RAM (DRAM)<br/>(Little-Endian)"]
-    end
-
-    PC -->|Endereço da Instrução| Bus
-    Bus <-->|Dados (8, 16, 32 bits)| DRAM
-    Bus -->|Palavra de 32 bits| FDE
-    FDE <-->|Leitura / Escrita| Regs
-    FDE <-->|Load / Store| Bus
-```
-
 ### Principais Componentes
 
 1. **CPU (`Cpu`)**: Mantém o estado da máquina (os 32 registradores de 32 bits e o `PC`). Garante a regra fundamental do RISC-V onde o registrador `x0` é fixo em zero.

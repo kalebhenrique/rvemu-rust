@@ -1,6 +1,6 @@
 # rvemu-rust
 
-Um simulador/emulador pedagógico da arquitetura **RISC-V de 32 bits (RV32I)** escrito em **Rust**.
+Um emulador da arquitetura **RISC-V de 32 bits (RV32I)** escrito em **Rust**.
 
 Este projeto tem como objetivo consolidar conceitos de **Organização e Arquitetura de Computadores (OAC)** — como banco de registradores, decodificação de instruções, manipulação de memória e _endianness_ — ao mesmo tempo em que serve como projeto de aprendizado prático da linguagem **Rust** e de programação de baixo nível.
 

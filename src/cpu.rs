@@ -1,6 +1,8 @@
 use crate::bus::Bus;
 use crate::dram::MemoryError;
-use crate::instruction::{Instruction, OP_AUIPC, OP_IMM, OP_LUI, OP_REG};
+use crate::instruction::{
+    Instruction, OP_AUIPC, OP_BRANCH, OP_IMM, OP_JAL, OP_JALR, OP_LOAD, OP_LUI, OP_REG, OP_STORE,
+};
 
 pub const REGISTERS_COUNT: usize = 32;
 
@@ -164,6 +166,90 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(4);
             }
 
+            // Desvios Condicionais (BEQ, BNE, BLT, BGE, BLTU, BGEU)
+            OP_BRANCH => {
+                let branch_taken = match inst.funct3() {
+                    0x0 => rs1_val == rs2_val,                   // BEQ
+                    0x1 => rs1_val != rs2_val,                   // BNE
+                    0x4 => (rs1_val as i32) < (rs2_val as i32),  // BLT
+                    0x5 => (rs1_val as i32) >= (rs2_val as i32), // BGE
+                    0x6 => rs1_val < rs2_val,                    // BLTU
+                    0x7 => rs1_val >= rs2_val,                   // BGEU
+                    _ => return Err(CpuError::IllegalInstruction(inst.0)),
+                };
+
+                if branch_taken {
+                    self.pc = self.pc.wrapping_add(inst.imm_b());
+                } else {
+                    self.pc = self.pc.wrapping_add(4);
+                }
+            }
+
+            // JAL (Jump and Link)
+            OP_JAL => {
+                let next_pc = self.pc.wrapping_add(4);
+                self.pc = self.pc.wrapping_add(inst.imm_j());
+                self.write_reg(rd, next_pc);
+            }
+
+            // JALR (Jump and Link Register)
+            OP_JALR => {
+                if inst.funct3() == 0x0 {
+                    let next_pc = self.pc.wrapping_add(4);
+                    let target = (rs1_val.wrapping_add(inst.imm_i())) & !1;
+                    self.pc = target;
+                    self.write_reg(rd, next_pc);
+                } else {
+                    return Err(CpuError::IllegalInstruction(inst.0));
+                }
+            }
+
+            // Instruções de Carga (LB, LH, LW, LBU, LHU)
+            OP_LOAD => {
+                let addr = rs1_val.wrapping_add(inst.imm_i());
+                match inst.funct3() {
+                    0x0 => {
+                        // LB (Load Byte com sinal)
+                        let val = self.bus.read8(addr)?;
+                        self.write_reg(rd, (val as i8 as i32) as u32);
+                    }
+                    0x1 => {
+                        // LH (Load Half-word com sinal)
+                        let val = self.bus.read16(addr)?;
+                        self.write_reg(rd, (val as i16 as i32) as u32);
+                    }
+                    0x2 => {
+                        // LW (Load Word de 32 bits)
+                        let val = self.bus.read32(addr)?;
+                        self.write_reg(rd, val);
+                    }
+                    0x4 => {
+                        // LBU (Load Byte sem sinal)
+                        let val = self.bus.read8(addr)?;
+                        self.write_reg(rd, val as u32);
+                    }
+                    0x5 => {
+                        // LHU (Load Half-word sem sinal)
+                        let val = self.bus.read16(addr)?;
+                        self.write_reg(rd, val as u32);
+                    }
+                    _ => return Err(CpuError::IllegalInstruction(inst.0)),
+                }
+                self.pc = self.pc.wrapping_add(4);
+            }
+
+            // Instruções de Armazenamento (SB, SH, SW)
+            OP_STORE => {
+                let addr = rs1_val.wrapping_add(inst.imm_s());
+                match inst.funct3() {
+                    0x0 => self.bus.write8(addr, rs2_val as u8)?,   // SB
+                    0x1 => self.bus.write16(addr, rs2_val as u16)?, // SH
+                    0x2 => self.bus.write32(addr, rs2_val)?,        // SW
+                    _ => return Err(CpuError::IllegalInstruction(inst.0)),
+                }
+                self.pc = self.pc.wrapping_add(4);
+            }
+
             _ => return Err(CpuError::IllegalInstruction(inst.0)),
         }
 
@@ -286,13 +372,11 @@ mod tests {
     #[test]
     fn test_execute_addi_and_pc_increment() {
         let mut cpu = Cpu::new();
-        // addi x1, x0, 15 (0x00f00093)
-        cpu.execute(Instruction(0x00f00093)).unwrap();
+        cpu.execute(Instruction(0x00f00093)).unwrap(); // addi x1, x0, 15
         assert_eq!(cpu.read_reg(1), 15);
         assert_eq!(cpu.pc, 4);
 
-        // addi x1, x1, -5 (0xffb08093)
-        cpu.execute(Instruction(0xffb08093)).unwrap();
+        cpu.execute(Instruction(0xffb08093)).unwrap(); // addi x1, x1, -5
         assert_eq!(cpu.read_reg(1), 10);
         assert_eq!(cpu.pc, 8);
     }
@@ -300,10 +384,8 @@ mod tests {
     #[test]
     fn test_execute_wrapping_arithmetic() {
         let mut cpu = Cpu::new();
-        cpu.write_reg(1, 0xFFFF_FFFF); // -1
-        // addi x2, x1, 1 -> deve dar wrap para 0 sem panic!
-        // addi x2, x1, 1: imm=1, rs1=1, funct3=0, rd=2, opcode=0x13 -> 0x00108113
-        cpu.execute(Instruction(0x00108113)).unwrap();
+        cpu.write_reg(1, 0xFFFF_FFFF);
+        cpu.execute(Instruction(0x00108113)).unwrap(); // addi x2, x1, 1
         assert_eq!(cpu.read_reg(2), 0);
     }
 
@@ -313,12 +395,10 @@ mod tests {
         cpu.write_reg(1, 20);
         cpu.write_reg(2, 8);
 
-        // add x3, x1, x2 (funct7=0, rs2=2, rs1=1, funct3=0, rd=3, opcode=0x33) -> 0x002081b3
-        cpu.execute(Instruction(0x002081b3)).unwrap();
+        cpu.execute(Instruction(0x002081b3)).unwrap(); // add x3, x1, x2
         assert_eq!(cpu.read_reg(3), 28);
 
-        // sub x4, x1, x2 (funct7=0x20, rs2=2, rs1=1, funct3=0, rd=4, opcode=0x33) -> 0x40208233
-        cpu.execute(Instruction(0x40208233)).unwrap();
+        cpu.execute(Instruction(0x40208233)).unwrap(); // sub x4, x1, x2
         assert_eq!(cpu.read_reg(4), 12);
     }
 
@@ -328,33 +408,26 @@ mod tests {
         cpu.write_reg(1, 0b1100);
         cpu.write_reg(2, 0b1010);
 
-        // and x3, x1, x2 -> 0b1000 = 8 (funct7=0, rs2=2, rs1=1, funct3=7, rd=3, opcode=0x33) -> 0x0020f1b3
-        cpu.execute(Instruction(0x0020f1b3)).unwrap();
+        cpu.execute(Instruction(0x0020f1b3)).unwrap(); // and x3, x1, x2
         assert_eq!(cpu.read_reg(3), 0b1000);
 
-        // or x4, x1, x2 -> 0b1110 = 14 (funct7=0, funct3=6, rd=4) -> 0x0020e233
-        cpu.execute(Instruction(0x0020e233)).unwrap();
+        cpu.execute(Instruction(0x0020e233)).unwrap(); // or x4, x1, x2
         assert_eq!(cpu.read_reg(4), 0b1110);
 
-        // xor x5, x1, x2 -> 0b0110 = 6 (funct7=0, funct3=4, rd=5) -> 0x0020c2b3
-        cpu.execute(Instruction(0x0020c2b3)).unwrap();
+        cpu.execute(Instruction(0x0020c2b3)).unwrap(); // xor x5, x1, x2
         assert_eq!(cpu.read_reg(5), 0b0110);
     }
 
     #[test]
     fn test_execute_slt_signed_vs_unsigned() {
         let mut cpu = Cpu::new();
-        cpu.write_reg(1, 0xFFFF_FFF6); // -10 em complemento de 2
+        cpu.write_reg(1, 0xFFFF_FFF6); // -10
         cpu.write_reg(2, 5);
 
-        // slt x3, x1, x2 (com sinal: -10 < 5 é TRUE -> 1)
-        // funct7=0, funct3=2, rs2=2, rs1=1, rd=3, op=0x33 -> 0x0020a1b3
-        cpu.execute(Instruction(0x0020a1b3)).unwrap();
+        cpu.execute(Instruction(0x0020a1b3)).unwrap(); // slt x3, x1, x2
         assert_eq!(cpu.read_reg(3), 1);
 
-        // sltu x4, x1, x2 (sem sinal: 0xFFFF_FFF6 < 5 é FALSE -> 0)
-        // funct7=0, funct3=3, rs2=2, rs1=1, rd=4, op=0x33 -> 0x0020b233
-        cpu.execute(Instruction(0x0020b233)).unwrap();
+        cpu.execute(Instruction(0x0020b233)).unwrap(); // sltu x4, x1, x2
         assert_eq!(cpu.read_reg(4), 0);
     }
 
@@ -363,30 +436,109 @@ mod tests {
         let mut cpu = Cpu::new();
         cpu.pc = 0x100;
 
-        // lui x1, 0x12345 -> 0x123450b7
-        cpu.execute(Instruction(0x123450b7)).unwrap();
+        cpu.execute(Instruction(0x123450b7)).unwrap(); // lui x1, 0x12345
         assert_eq!(cpu.read_reg(1), 0x1234_5000);
 
-        // auipc x2, 0x01000 (com pc atual = 0x104) -> 0x01000117
-        cpu.execute(Instruction(0x01000117)).unwrap();
+        cpu.execute(Instruction(0x01000117)).unwrap(); // auipc x2, 0x01000
         assert_eq!(cpu.read_reg(2), 0x0100_0000 + 0x104);
     }
 
     #[test]
-    fn test_cpu_step_sequence() {
+    fn test_execute_branches() {
         let mut cpu = Cpu::new();
-        // Grava duas instruções na DRAM:
-        // 0x0: addi x1, x0, 10 (0x00a00093)
-        // 0x4: addi x2, x1, 20 (0x01408113)
-        cpu.bus.write32(0x0, 0x00a00093).unwrap();
-        cpu.bus.write32(0x4, 0x01408113).unwrap();
+        cpu.pc = 0x10;
+        cpu.write_reg(1, 42);
+        cpu.write_reg(2, 42);
+        cpu.write_reg(3, 99);
 
-        cpu.step().unwrap();
-        assert_eq!(cpu.read_reg(1), 10);
-        assert_eq!(cpu.pc, 4);
+        // beq x1, x2, 16 -> salta se x1 == x2 (42 == 42 -> SIM) -> 0x00208863
+        cpu.execute(Instruction(0x00208863)).unwrap();
+        assert_eq!(cpu.pc, 0x10 + 16);
 
-        cpu.step().unwrap();
-        assert_eq!(cpu.read_reg(2), 30);
-        assert_eq!(cpu.pc, 8);
+        // bne x1, x2, 16 -> salta se x1 != x2 (42 != 42 -> NÃO) -> pc avança 4
+        let current_pc = cpu.pc;
+        // bne x1, x2, 16: funct3=1, rs1=1, rs2=2 -> 0x00209863
+        cpu.execute(Instruction(0x00209863)).unwrap();
+        assert_eq!(cpu.pc, current_pc + 4);
+    }
+
+    #[test]
+    fn test_execute_jal_and_jalr() {
+        let mut cpu = Cpu::new();
+        cpu.pc = 0x20;
+
+        // jal x1, 20 (salva pc + 4 em x1 e pula pc + 20) -> 0x014000ef
+        cpu.execute(Instruction(0x014000ef)).unwrap();
+        assert_eq!(cpu.read_reg(1), 0x24); // endereço de retorno
+        assert_eq!(cpu.pc, 0x20 + 20); // 0x34
+
+        // jalr x2, 0(x1) -> pula para x1 & !1 = 0x24
+        // jalr: imm=0, rs1=1, funct3=0, rd=2, op=0x67 -> 0x00008167
+        cpu.execute(Instruction(0x00008167)).unwrap();
+        assert_eq!(cpu.read_reg(2), 0x34 + 4);
+        assert_eq!(cpu.pc, 0x24);
+    }
+
+    #[test]
+    fn test_execute_load_and_store_word() {
+        let mut cpu = Cpu::new();
+        cpu.write_reg(1, 0x200); // endereço base
+        cpu.write_reg(2, 0xCAFE_BABE);
+
+        // sw x2, 8(x1) -> grava no endereço 0x208
+        // imm_s=8, rs2=2, rs1=1, funct3=2, op=0x23 -> 0x0020a423
+        cpu.execute(Instruction(0x0020a423)).unwrap();
+        assert_eq!(cpu.bus.read32(0x208).unwrap(), 0xCAFE_BABE);
+
+        // lw x3, 8(x1) -> lê do endereço 0x208
+        // imm_i=8, rs1=1, funct3=2, rd=3, op=0x03 -> 0x0080a183
+        cpu.execute(Instruction(0x0080a183)).unwrap();
+        assert_eq!(cpu.read_reg(3), 0xCAFE_BABE);
+    }
+
+    #[test]
+    fn test_execute_byte_and_half_sign_extension() {
+        let mut cpu = Cpu::new();
+        cpu.write_reg(1, 0x100);
+        cpu.bus.write8(0x100, 0xFE).unwrap(); // -2 em signed i8
+
+        // lb x2, 0(x1) -> deve estender sinal para 0xFFFF_FFFE
+        // imm_i=0, rs1=1, funct3=0, rd=2, op=0x03 -> 0x00008103
+        cpu.execute(Instruction(0x00008103)).unwrap();
+        assert_eq!(cpu.read_reg(2), 0xFFFF_FFFE);
+
+        // lbu x3, 0(x1) -> sem sinal: 0x0000_00FE
+        // imm_i=0, rs1=1, funct3=4, rd=3, op=0x03 -> 0x0000c183
+        cpu.execute(Instruction(0x0000c183)).unwrap();
+        assert_eq!(cpu.read_reg(3), 0x0000_00FE);
+    }
+
+    #[test]
+    fn test_execute_loop_countdown() {
+        let mut cpu = Cpu::new();
+        // Programa: calcula a soma de 5 até 1 (5 + 4 + 3 + 2 + 1 = 15)
+        // 0x00: addi x1, x0, 5    (contador = 5)           -> 0x00500093
+        // 0x04: addi x2, x0, 0    (soma = 0)               -> 0x00000113
+        // [loop em 0x08]:
+        // 0x08: beq  x1, x0, 16   (se x1 == 0 pula para 0x18) -> 0x00008863
+        // 0x0c: add  x2, x2, x1   (soma += x1)             -> 0x00110133
+        // 0x10: addi x1, x1, -1   (x1 -= 1)                -> 0xfff08093
+        // 0x14: jal  x0, -12      (volta para 0x08)        -> 0xff5ff06f
+        // [fim em 0x18]
+        cpu.bus.write32(0x00, 0x00500093).unwrap();
+        cpu.bus.write32(0x04, 0x00000113).unwrap();
+        cpu.bus.write32(0x08, 0x00008863).unwrap();
+        cpu.bus.write32(0x0c, 0x00110133).unwrap();
+        cpu.bus.write32(0x10, 0xfff08093).unwrap();
+        cpu.bus.write32(0x14, 0xff5ff06f).unwrap();
+
+        // Executa até chegar no endereço de término 0x18
+        while cpu.pc != 0x18 {
+            cpu.step().unwrap();
+        }
+
+        assert_eq!(cpu.read_reg(1), 0, "Contador final deve ser 0");
+        assert_eq!(cpu.read_reg(2), 15, "Soma de 1 a 5 deve ser 15");
+        assert_eq!(cpu.pc, 0x18);
     }
 }

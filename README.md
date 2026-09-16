@@ -44,11 +44,11 @@ Implementar a especificação base **RV32I (Unprivileged ISA)**, permitindo:
   - [x] Instruções com imediatos (`ADDI`, `SLTI`, `XORI`, `ORI`, `ANDI`, `SLLI`, `SRLI`, `SRAI`).
   - [x] Instruções registrador-registrador (`ADD`, `SUB`, `SLL`, `SLT`, `XOR`, `SRL`, `SRA`, `OR`, `AND`).
   - [x] Aritmética com `wrapping_*` para prevenção de panic por overflow no Rust.
-- [ ] **Milestone 4: Saltos, Condicionais e Memória (Execute - Parte 2)**
-  - [ ] Branches condicionais (`BEQ`, `BNE`, `BLT`, `BGE`, `BLTU`, `BGEU`).
-  - [ ] Saltos incondicionais (`JAL`, `JALR`).
-  - [ ] Instruções de Load/Store (`LB`, `LH`, `LW`, `SB`, `SH`, `SW`).
-  - [ ] Imediatos superiores (`LUI`, `AUIPC`).
+- [x] **Milestone 4: Saltos, Condicionais e Memória (Execute - Parte 2)**
+  - [x] Branches condicionais (`BEQ`, `BNE`, `BLT`, `BGE`, `BLTU`, `BGEU`).
+  - [x] Saltos incondicionais (`JAL`, `JALR`).
+  - [x] Instruções de Load/Store (`LB`, `LH`, `LW`, `SB`, `SH`, `SW`).
+  - [x] Imediatos superiores (`LUI`, `AUIPC`).
 - [ ] **Milestone 5: Sistema, Carregamento de Binários & Testes**
   - [ ] Suporte básico a `ECALL` e `EBREAK`.
   - [ ] Leitor de arquivos binários planos (`.bin`).

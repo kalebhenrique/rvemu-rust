@@ -11,7 +11,7 @@ Este projeto tem como objetivo consolidar conceitos de **Organização e Arquite
 Implementar a especificação base **RV32I (Unprivileged ISA)**, permitindo:
 
 - Executar instruções aritméticas, lógicas, de deslocamento e controle de fluxo.
-- Gerenciar leituras e escritas na memória física (RAM/DRAM) respeitando o formato **Little-Endian**.
+- Gerenciar leituras e escritas na memória física DRAM respeitando o formato **Little-Endian**.
 - Carregar e executar pequenos programas compilados a partir de assembly ou C para RISC-V.
 - Validar a precisão da emulação através de testes unitários e testes de integração.
 

@@ -53,10 +53,10 @@ flowchart LR
 - [x] **Milestone 0: Setup & Estruturas Base**
   - [x] Definição da `struct Cpu` (`regs: [u32; 32]`, `pc: u32`).
   - [x] Métodos auxiliares de leitura e escrita em registradores com salvaguarda de `x0`.
-- [ ] **Milestone 1: Memória & Barramento**
-  - [ ] Estrutura `Dram` baseada em `Vec<u8>`.
-  - [ ] Operações de `read8/16/32` e `write8/16/32` (Little-Endian).
-  - [ ] Tratamento de acessos fora de limites (_OutOfBounds_).
+- [x] **Milestone 1: Memória & Barramento**
+  - [x] Estrutura `Dram` baseada em `Vec<u8>`.
+  - [x] Operações de `read8/16/32` e `write8/16/32` (Little-Endian).
+  - [x] Tratamento de acessos fora de limites (*OutOfBounds*).
 - [ ] **Milestone 2: Fetch & Decode**
   - [ ] Leitura da instrução de 32 bits apontada pelo `PC`.
   - [ ] Decodificação de campos e extensão de sinal para todos os formatos de imediatos.

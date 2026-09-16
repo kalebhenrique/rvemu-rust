@@ -1,3 +1,5 @@
+use crate::bus::Bus;
+
 pub const REGISTERS_COUNT: usize = 32;
 
 pub const ABI_REG_NAMES: [&str; REGISTERS_COUNT] = [
@@ -10,6 +12,7 @@ pub const ABI_REG_NAMES: [&str; REGISTERS_COUNT] = [
 pub struct Cpu {
     pub regs: [u32; REGISTERS_COUNT],
     pub pc: u32,
+    pub bus: Bus,
 }
 
 impl Cpu {
@@ -17,6 +20,15 @@ impl Cpu {
         Self {
             regs: [0; REGISTERS_COUNT],
             pc: 0,
+            bus: Bus::new(),
+        }
+    }
+
+    pub fn with_bus(bus: Bus) -> Self {
+        Self {
+            regs: [0; REGISTERS_COUNT],
+            pc: 0,
+            bus,
         }
     }
 
@@ -120,5 +132,12 @@ mod tests {
         let mut cpu = Cpu::new();
         cpu.write_reg(32, 0x1234);
         assert_eq!(cpu.read_reg(32), 0);
+    }
+
+    #[test]
+    fn test_cpu_access_memory_through_bus() {
+        let mut cpu = Cpu::new();
+        cpu.bus.write32(0x10, 0xCAFE_BABE).unwrap();
+        assert_eq!(cpu.bus.read32(0x10).unwrap(), 0xCAFE_BABE);
     }
 }

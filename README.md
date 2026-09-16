@@ -50,9 +50,9 @@ flowchart LR
 
 ## Roadmap de Desenvolvimento (Milestones)
 
-- [ ] **Milestone 0: Setup & Estruturas Base**
-  - [ ] Definição da `struct Cpu` (`regs: [u32; 32]`, `pc: u32`).
-  - [ ] Métodos auxiliares de leitura e escrita em registradores com salvaguarda de `x0`.
+- [x] **Milestone 0: Setup & Estruturas Base**
+  - [x] Definição da `struct Cpu` (`regs: [u32; 32]`, `pc: u32`).
+  - [x] Métodos auxiliares de leitura e escrita em registradores com salvaguarda de `x0`.
 - [ ] **Milestone 1: Memória & Barramento**
   - [ ] Estrutura `Dram` baseada em `Vec<u8>`.
   - [ ] Operações de `read8/16/32` e `write8/16/32` (Little-Endian).

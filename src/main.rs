@@ -5,47 +5,28 @@ fn main() {
 
     let mut cpu = Cpu::new();
 
-    // 1. Registradores
-    cpu.write_reg(1, 0x1234_5678); // x1 (ra)
-    cpu.write_reg(2, 0x7FFF_FFFF); // x2 (sp)
-    cpu.write_reg(10, 42); // x10 (a0)
-    cpu.write_reg(0, 0xDEAD_BEEF); // x0 (permanece zero)
+    // 1. Simula um programa em memória na posição 0x0:
+    // addi x1, x0, 42   (0x02a00093)
+    // sw   x1, 16(x2)   (0x00112823)
+    cpu.bus.write32(0x0, 0x02a00093).unwrap();
+    cpu.bus.write32(0x4, 0x00112823).unwrap();
 
-    // 2. Memória DRAM via Barramento (Bus)
-    let addr = 0x1000;
-    let word_val = 0x1234_5678;
-    cpu.bus
-        .write32(addr, word_val)
-        .expect("Falha ao gravar na memória");
+    println!("\n--- Fetch & Decode da 1ª instrução (PC: 0x0000) ---");
+    cpu.pc = 0x0;
+    let inst1 = cpu.fetch().unwrap();
+    println!("Palavra binária: 0x{:08x}", inst1.0);
+    println!("Opcode : 0x{:02x} (OP_IMM)", inst1.opcode());
+    println!("rd     : x{} ({})", inst1.rd(), rvemu_rust::cpu::ABI_REG_NAMES[inst1.rd()]);
+    println!("funct3 : {}", inst1.funct3());
+    println!("rs1    : x{} ({})", inst1.rs1(), rvemu_rust::cpu::ABI_REG_NAMES[inst1.rs1()]);
+    println!("imm_i  : {} (decimal)", inst1.imm_i() as i32);
 
-    println!("\nGravado 0x{:08x} no endereço 0x{:04x}", word_val, addr);
-    println!("Verificando bytes individuais na memória (Little-Endian):");
-    println!(
-        "  [0x{:04x}] = 0x{:02x} (LSB)",
-        addr,
-        cpu.bus.read8(addr).unwrap()
-    );
-    println!(
-        "  [0x{:04x}] = 0x{:02x}",
-        addr + 1,
-        cpu.bus.read8(addr + 1).unwrap()
-    );
-    println!(
-        "  [0x{:04x}] = 0x{:02x}",
-        addr + 2,
-        cpu.bus.read8(addr + 2).unwrap()
-    );
-    println!(
-        "  [0x{:04x}] = 0x{:02x} (MSB)",
-        addr + 3,
-        cpu.bus.read8(addr + 3).unwrap()
-    );
-
-    let read_back = cpu.bus.read32(addr).expect("Falha ao ler da memória");
-    println!(
-        "Lido de volta como palavra de 32 bits: 0x{:08x}\n",
-        read_back
-    );
-
-    cpu.dump_registers();
+    println!("\n--- Fetch & Decode da 2ª instrução (PC: 0x0004) ---");
+    cpu.pc = 0x4;
+    let inst2 = cpu.fetch().unwrap();
+    println!("Palavra binária: 0x{:08x}", inst2.0);
+    println!("Opcode : 0x{:02x} (OP_STORE)", inst2.opcode());
+    println!("rs1    : x{} ({})", inst2.rs1(), rvemu_rust::cpu::ABI_REG_NAMES[inst2.rs1()]);
+    println!("rs2    : x{} ({})", inst2.rs2(), rvemu_rust::cpu::ABI_REG_NAMES[inst2.rs2()]);
+    println!("imm_s  : {} (decimal)", inst2.imm_s() as i32);
 }

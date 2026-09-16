@@ -57,9 +57,9 @@ flowchart LR
   - [x] Estrutura `Dram` baseada em `Vec<u8>`.
   - [x] Operações de `read8/16/32` e `write8/16/32` (Little-Endian).
   - [x] Tratamento de acessos fora de limites (*OutOfBounds*).
-- [ ] **Milestone 2: Fetch & Decode**
-  - [ ] Leitura da instrução de 32 bits apontada pelo `PC`.
-  - [ ] Decodificação de campos e extensão de sinal para todos os formatos de imediatos.
+- [x] **Milestone 2: Fetch & Decode**
+  - [x] Leitura da instrução de 32 bits apontada pelo `PC`.
+  - [x] Decodificação de campos e extensão de sinal para todos os formatos de imediatos.
 - [ ] **Milestone 3: Instruções Aritméticas e Lógicas (Execute - Parte 1)**
   - [ ] Instruções com imediatos (`ADDI`, `SLTI`, `XORI`, `ORI`, `ANDI`, `SLLI`, `SRLI`, `SRAI`).
   - [ ] Instruções registrador-registrador (`ADD`, `SUB`, `SLL`, `SLT`, `XOR`, `SRL`, `SRA`, `OR`, `AND`).

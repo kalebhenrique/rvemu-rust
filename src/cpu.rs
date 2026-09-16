@@ -1,4 +1,6 @@
 use crate::bus::Bus;
+use crate::dram::MemoryError;
+use crate::instruction::Instruction;
 
 pub const REGISTERS_COUNT: usize = 32;
 
@@ -30,6 +32,12 @@ impl Cpu {
             pc: 0,
             bus,
         }
+    }
+
+    // Busca a instrução de 32 bits apontada pelo PC
+    pub fn fetch(&self) -> Result<Instruction, MemoryError> {
+        let word = self.bus.read32(self.pc)?;
+        Ok(Instruction(word))
     }
 
     pub fn read_reg(&self, reg: usize) -> u32 {
@@ -139,5 +147,19 @@ mod tests {
         let mut cpu = Cpu::new();
         cpu.bus.write32(0x10, 0xCAFE_BABE).unwrap();
         assert_eq!(cpu.bus.read32(0x10).unwrap(), 0xCAFE_BABE);
+    }
+
+    #[test]
+    fn test_cpu_fetch() {
+        let mut cpu = Cpu::new();
+        // Grava 'addi x1, x0, 42' (0x02a00093) na posição de memória 0x0
+        cpu.bus.write32(0x0, 0x02a00093).unwrap();
+        cpu.pc = 0x0;
+
+        let inst = cpu.fetch().unwrap();
+        assert_eq!(inst.0, 0x02a00093);
+        assert_eq!(inst.opcode(), crate::instruction::OP_IMM);
+        assert_eq!(inst.rd(), 1);
+        assert_eq!(inst.imm_i(), 42);
     }
 }
